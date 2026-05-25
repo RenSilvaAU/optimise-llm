@@ -42,7 +42,7 @@ fresh prefill.
 
 ```bash
 git clone <this-repo>
-cd disaggregation-experiment
+cd optimise-llm
 
 cp .env.example .env
 # Edit .env — fill in HF_TOKEN if you plan to use a gated model.
