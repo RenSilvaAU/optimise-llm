@@ -1,36 +1,25 @@
 #!/usr/bin/env bash
-# BASELINE: one vLLM server, tp=1 on GPU 0 only.
-# Same per-stage compute budget as the disagg setup -> fair comparison.
-# Exposes OpenAI API on http://localhost:8000.
+# BASELINE (Scenario A): NVIDIA NIM for nvidia/nemotron-3-nano.
+# All GPUs, auto-selected profile, NIM downloads weights itself on first run.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+set -a; source .env; set +a
 
-# Load secrets/config from .env if present.
-if [[ -f "${SCRIPT_DIR}/.env" ]]; then
-    set -a
-    # shellcheck disable=SC1091
-    source "${SCRIPT_DIR}/.env"
-    set +a
-fi
+NIM_IMG=nvcr.io/nim/nvidia/nemotron-3-nano:latest
+NIM_CACHE_PATH=${NIM_CACHE_PATH:-$HOME/.cache/nim}
+mkdir -p "$NIM_CACHE_PATH"
+# NIM runs as a non-root user in group 0; make the cache writable for it.
+chmod -R a+rwX "$NIM_CACHE_PATH"
 
-MODEL=${MODEL:-Qwen/Qwen2.5-7B-Instruct}
-HF_CACHE=${HF_CACHE:-$HOME/.cache/huggingface}
-mkdir -p "$HF_CACHE"
-
-echo "==> BASELINE: $MODEL on GPU 0 (tp=1), endpoint http://localhost:8000"
+echo "==> BASELINE (NIM): nvidia/nemotron-3-nano on all GPUs at http://localhost:8000"
 
 docker run --rm -it \
-    --name vllm-baseline \
-    --gpus '"device=0"' \
+    --name nim-baseline \
+    --gpus all \
     --shm-size=16g \
     --ipc=host \
     -p 8000:8000 \
-    -v "$HF_CACHE":/root/.cache/huggingface \
-    -e HF_TOKEN="${HF_TOKEN:-}" \
-    vllm/vllm-openai:latest \
-    --model "$MODEL" \
-    --tensor-parallel-size 1 \
-    --port 8000 \
-    --gpu-memory-utilization 0.85 \
-    --max-model-len 16384
+    -e NGC_API_KEY \
+    -e NIM_CACHE_PATH=/opt/nim/.cache \
+    -v "$NIM_CACHE_PATH":/opt/nim/.cache \
+    "$NIM_IMG"
